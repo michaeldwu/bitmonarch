@@ -37,7 +37,9 @@ the reference client makes a new decision every time period, unchoking S-1
 peers from which it received the highest average download rate during the
 last 2 time periods. (which agents have allowed you to download from them)
 
-   * Check what bits you need
+   * Sort who's friendliest first to you (highest number of blocks)
+   * Check what pieces you need, if agent doesn't 
+   * If they do, put them in
    * Use AgentHistory to be able to see the highest average download rate
 
 Step 3: Optimistic unchoking
@@ -101,6 +103,9 @@ class BitMonarchStd(Peer):
             # More symmetry breaking -- ask for random pieces.
             # This would be the place to try fancier piece-requesting strategies
             # to avoid getting the same thing from multiple peers at a time.
+
+            # iterate through sorted rarityList, check if key is in intersection
+            # 
 
             # Should also be rarest first
             for piece_id in random.sample(isect, n):
