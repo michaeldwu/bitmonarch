@@ -93,28 +93,35 @@ class BitMonarchStd(Peer):
 
         # NEED TO SORT BY RAREST FIRST RIGHT? Is this the place??
         peers.sort(key=lambda p: p.id)
+        print("'PEERS' BELOW HERE")
         print(peers)
 
-        # request all available pieces from all peers!
-        # (up to self.max_requests from each)
+        pieceCount = {}
+
         for peer in peers:
-            av_set = set(peer.available_pieces)
-            isect = av_set.intersection(np_set)
-            n = min(self.max_requests, len(isect))
-            # More symmetry breaking -- ask for random pieces.
-            # This would be the place to try fancier piece-requesting strategies
-            # to avoid getting the same thing from multiple peers at a time.
+            avail_pieces = peer.available_pieces
+            print(avail_pieces)
+            for piece in avail_pieces:
+                if piece in pieceCount:
+                    pieceCount[piece] += 1
+                else:
+                    pieceCount[piece] = 1
 
-            # iterate through sorted rarityList, check if key is in intersection
-            # 
+        print(pieceCount)
+        rarestPieces = sorted(pieceCount, key=pieceCount.get)
+        print(rarestPieces)
 
-            # Should also be rarest first
-            for piece_id in random.sample(isect, n):
-                # aha! The peer has this piece! Request it.
-                # which part of the piece do we need next?
-                # (must get the next-needed blocks in order)
+        # Request rarest piece first, then less rare
+        for piece_id in rarestPieces:
+            if piece_id in np_set:
+                # print(f'Piece_id: {piece_id}')
+                has_piece = set()
+                for peer in peers:
+                    if piece_id in peer.available_pieces:
+                        has_piece.add(peer)
+                peer_req = random.choice(list(has_piece))
                 start_block = self.pieces[piece_id]
-                r = Request(self.id, peer.id, piece_id, start_block)
+                r = Request(self.id, peer_req.id, piece_id, start_block)
                 requests.append(r)
 
         return requests
