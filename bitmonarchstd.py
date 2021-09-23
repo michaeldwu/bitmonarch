@@ -37,10 +37,11 @@ the reference client makes a new decision every time period, unchoking S-1
 peers from which it received the highest average download rate during the
 last 2 time periods. (which agents have allowed you to download from them)
 
-   * Sort who's friendliest first to you (highest number of blocks)
+   * Sort who's friendliest first to you (highest number of blocks in AgentHistory)
    * Check what pieces you need, if agent doesn't 
-   * If they do, put them in
-   * Use AgentHistory to be able to see the highest average download rate
+   * If they do, put them in your Upload slot
+
+   Use AgentHistory to be able to see the highest average download rate
 
 Step 3: Optimistic unchoking
 Every 3 time periods, the reference client allocates an additional optimistic
