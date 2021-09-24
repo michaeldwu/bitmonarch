@@ -153,11 +153,14 @@ class BitMonarchStd(Peer):
         round = history.current_round()
 
         # Find everyone who's allowed you to download from them before and add you to this set
-        friendliestSet = {}
+        friendliestDict = {}
 
         # 3 Upload Slots Normally
         chosen = []
         bws = []
+        
+        request_id = set([r.requester_id for r in requests])
+        print(request_id)
 
         if round > 0:
             if round >= 2:
@@ -167,41 +170,29 @@ class BitMonarchStd(Peer):
             for downloadlist in history.downloads[i:]:
                 # Double counting
                 for download in downloadlist:
-                    if download.from_id in friendliestSet:
-                        friendliestSet[download.from_id] = friendliestSet[download.from_id] + download.blocks
-                    else:
-                        friendliestSet[download.from_id] = download.blocks
-
+                    if download.from_id in request_id:
+                        if download.from_id in friendliestDict:
+                            friendliestDict[download.from_id] = friendliestDict[download.from_id] + download.blocks
+                        else:
+                            friendliestDict[download.from_id] = download.blocks
+            
+            
             # Now sort friendlistSet by blocks allowed you to download
-            friendliestSet = dict(sorted(friendliestSet.items(), key=lambda item: item[1]))
-            # print(friendliestSet)
-
-            if len(friendliestSet.keys()) != 0:
-                chosen = list(friendliestSet.keys())[0:3]
-                if requests is not None and len(requests) != 0:
-                    request_id = list(set([r.requester_id for r in requests]))
-                    for i in chosen:
-                        if i in request_id:
-                            request_id.remove(i)
-                    
-                    # Optimistic Unchoking
-                    if round % 3 == 0:
-                        if len(request_id) != 0:
-                            self.optimisticUnchoked = random.choice(request_id)
-                try:
-                    chosen.append(self.optimisticUnchoked)
-                except:
-                    chosen.append(list(friendliestSet.keys())[4])
-                bws = even_split(self.up_bw, len(chosen))
+            friendliestDict = dict(sorted(friendliestDict.items(), key=lambda item: item[1]))
+            friendliestIDs = list(friendliestDict.keys())
         else:
-            #random from requests
-            if requests:
-                requestsApproved = random.sample(requests, 4)
-                chosen = [requestsApproved[0].requester_id, requestsApproved[1].requester_id, requestsApproved[2].requester_id]
-                bws = even_split(self.up_bw, len(chosen))
+            friendliestIDs = list(request_id)
+            random.shuffle(friendliestIDs)
+        
+        length = min(3, len(friendliestIDs))
+        # add randos to end of this in our request set
+        print(friendliestIDs)
+        chosen = friendliestIDs[:length]
+        chosen += random.sample(request_id, min(4 - length, len(request_id)))
+
+        bws = even_split(self.up_bw, max(1,len(chosen)))
 
         # create actual uploads out of the list of peer ids and bandwidths
-        uploads = [Upload(self.id, peer_id, bw)
-                   for (peer_id, bw) in zip(chosen, bws)]
-
+        uploads = [Upload(self.id, peer_id, bw) for (peer_id, bw) in zip(chosen, bws)]
+        
         return uploads
