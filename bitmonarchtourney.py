@@ -7,6 +7,7 @@
 # probably get rid of the silly logging messages, and then add more logic.
 
 import random
+import math
 import logging
 
 from messages import Upload, Request
@@ -18,6 +19,28 @@ class BitMonarchTourney(Peer):
         print(("post_init(): %s here!" % self.id))
         self.dummy_state = dict()
         self.dummy_state["cake"] = "lie"
+
+        self.download_dict = {}
+        self.upload_dict = {}
+        self.roundsOfUploads = {}
+
+        self.pastround_chosen = []
+
+    def rarestPiecesOrdered(self, peers):
+        peers.sort(key=lambda p: p.id)
+        pieceCount = {}
+
+        for peer in peers:
+            avail_pieces = peer.available_pieces
+            for piece in avail_pieces:
+                if piece in pieceCount:
+                    pieceCount[piece] += 1
+                else:
+                    pieceCount[piece] = 1
+
+        rarestPieces = sorted(pieceCount, key=pieceCount.get)
+        return rarestPieces, pieceCount
+
 
     def requests(self, peers, history):
         """
@@ -49,19 +72,7 @@ class BitMonarchTourney(Peer):
 
         # Whenever a peer downloads a piece of the file, it sends per-piece have messages to the peers in its neighborhood. Each peer maintains
         # an estimate of the availibility of each piece by counting how many of its neighbors have the pieces.
-
-        peers.sort(key=lambda p: p.id)
-        pieceCount = {}
-
-        for peer in peers:
-            avail_pieces = peer.available_pieces
-            for piece in avail_pieces:
-                if piece in pieceCount:
-                    pieceCount[piece] += 1
-                else:
-                    pieceCount[piece] = 1
-
-        rarestPieces = sorted(pieceCount, key=pieceCount.get)
+        rarestPieces, pieceCount = self.rarestPiecesOrdered(peers)
 
         # index is piece ID, value is how often it shows up
 
@@ -80,38 +91,121 @@ class BitMonarchTourney(Peer):
     def uploads(self, requests, peers, history):
         """
         requests -- a list of the requests for this peer for this round
-        peers -- available info about all the peers
+        peers -- available info about all the peers. Will contain available histories and
         history -- history for all previous rounds
+
+        example history:
+        AgentHistory(downloads=[[Download(from_id=Seed0, to_id=BitMonarchStd2, piece=0, blocks=1)], [Download(from_id=Seed0, to_id=BitMonarchStd2, piece=1, blocks=1)]], uploads=[[], []])
 
         returns: list of Upload objects.
 
         In each round, this will be called after requests().
+
+
+            * Sort who's friendliest first to you (highest number of blocks in AgentHistory)
+            * Check what pieces they need
+            * If you have the piece they need, put them in your Upload slot
         """
-
         round = history.current_round()
-        logging.debug("%s again.  It's round %d." % (
-            self.id, round))
-        # One could look at other stuff in the history too here.
-        # For example, history.downloads[round-1] (if round != 0, of course)
-        # has a list of Download objects for each Download to this peer in
-        # the previous round.
 
-        if len(requests) == 0:
-            logging.debug("No one wants my pieces!")
-            chosen = []
-            bws = []
+        gamma = 0.1
+        r = 3
+        alpha = 0.2
+
+        chosen = []
+        bws = []
+
+        num_peers = len(peers)
+        if round == 0:
+            # We chose to pick a lower upload and download initial rate (subtracting here instead of adding) because
+            # its very easy for us to increase our upload (every round we aren't unchoked), but rather tough to
+            # decrease upload, as it requires us to be unchoked for r consecutive rounds
+            download_rate = (self.conf.max_up_bw - self.conf.min_up_bw) / 2 / 4
+            upload_rate = (self.conf.max_up_bw - self.conf.min_up_bw) / 2 / 4
+
+            for peer in peers:
+                self.download_dict[peer.id] = download_rate
+                self.upload_dict[peer.id] = upload_rate
+                self.roundsOfUploads[peer.id] = 0
         else:
-            logging.debug("Still here: uploading to a random peer")
-            # change my internal state for no reason
-            self.dummy_state["cake"] = "pie"
 
-            request = random.choice(requests)
-            chosen = [request.requester_id]
-            # Evenly "split" my upload bandwidth among the one chosen requester
-            bws = even_split(self.up_bw, len(chosen))
+            # Update the values of unchoked
+
+            # iterate through list of pastround_chosen
+            # if pastround_chosen is in history.id
+            # then we update their download value self.download_dict
+
+            # update self.roundsOfUploads[i]
+            # if self.roundsOfUploads[i] >= r
+            # then we decrement then by b
+            # else
+            # increase our upload setting for that index by (1+alpha)
+
+            # pull out all the IDs for the people who let us download in the last round
+            generousPeers = {}
+
+            for download in history.downloads[-1]:
+                if download.from_id in generousPeers:
+                    generousPeers[download.from_id] = generousPeers[download.from_id] + download.blocks
+                else:
+                    generousPeers[download.from_id] = download.blocks
+
+            for peerInfo in peers:
+                peer = peerInfo.id
+                if peer in generousPeers:
+                    self.download_dict[peer] = generousPeers[peer]
+
+                    self.roundsOfUploads[peer] += 1
+                    if self.roundsOfUploads[peer] >= r:
+                        self.upload_dict[peer] = self.upload_dict[peer] * (1 - gamma)
+                else:
+                    self.upload_dict[peer] = self.upload_dict[peer] * (1 + alpha)
+                    self.roundsOfUploads[peer] = 0
+
+
+            # for peer in self.pastround_chosen:
+            #     if peer in generousPeers:
+            #         # Currently only updating downloads for if they were nice, can update downloads for everybody that gave me
+            #         # self.download_dict[peer] = generousPeers[peer]
+            #
+            #         self.roundsOfUploads[peer] += 1
+            #         if self.roundsOfUploads[peer] >= r:
+            #             self.upload_dict[peer] = self.upload_dict[peer] * (1 - gamma)
+            #     else:
+            #         self.upload_dict[peer] = self.upload_dict[peer] * (1 + alpha)
+            #         self.roundsOfUploads[peer] = 0
+
+
+        ratio_dictionary = {peer.id: self.download_dict[peer.id] / self.upload_dict[peer.id] for peer in peers}
+        ratio_dictionary = dict(sorted(ratio_dictionary.items(), key=lambda item: item[1], reverse=True))
+
+        space_used = 0
+
+        request_ids = [request.requester_id for request in requests]
+
+        # iterate through sorted dictionary (give to best ratio)
+        for key, value in ratio_dictionary.items():
+            if key in request_ids:
+                if (self.upload_dict[key] + space_used <= self.up_bw):
+                    # give upload_array[key] to that key
+                    # Don't upload to ourselves
+                    if key != self.id:
+                        chosen.append(key)
+                        bws.append(self.upload_dict[key])
+
+                        space_used += self.upload_dict[key]
+                else:
+                    # rando
+                    if len(requests) != 0:
+                        chosen.append(random.choice(request_ids))
+                        bws.append(self.up_bw - space_used)
+                    break
+
+        self.pastround_chosen = chosen
 
         # create actual uploads out of the list of peer ids and bandwidths
         uploads = [Upload(self.id, peer_id, bw)
                    for (peer_id, bw) in zip(chosen, bws)]
-            
+
         return uploads
+
