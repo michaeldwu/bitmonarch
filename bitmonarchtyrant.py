@@ -20,6 +20,13 @@ class BitMonarchTyrant(Peer):
         self.dummy_state["cake"] = "lie"
         self.uploadHistory = []
 
+        self.download_array = []
+        self.upload_array = []
+
+        self.pastround_chosen = []
+        self.roundsOfUploads = []
+        
+
     def requests(self, peers, history):
         """
         peers: available info about the peers (who has what pieces)
@@ -110,54 +117,82 @@ class BitMonarchTyrant(Peer):
         """
         round = history.current_round()
 
-        # Find everyone who's allowed you to download from them before and add you to this set
-        friendliestSet = {}
 
-        # 3 Upload Slots Normally
+        gamma = 0.1
+        r = 3
+        alpha = 0.2
+
         chosen = []
         bws = []
 
-        if round > 0:
-            if round >= 2:
-                i = -2
-            else:
-                i = -1
-            for downloadlist in history.downloads[i:]:
-                # Double counting
-                for download in downloadlist:
-                    if download.from_id in friendliestSet:
-                        friendliestSet[download.from_id] = friendliestSet[download.from_id] + download.blocks
-                    else:
-                        friendliestSet[download.from_id] = download.blocks
+        num_peers = len(peers)
+        if round == 0:
+            download_rate = (self.conf.max_up_bw - self.conf.min_up_bw)/2/4
+            # Try making upload_rate lower! -Jmack
+            upload_rate = (self.conf.max_up_bw - self.conf.min_up_bw)/2/4
 
-            # Now sort friendlistSet by blocks allowed you to download
-            dict(sorted(friendliestSet.items(), key=lambda item: item[1]))
-            # print(friendliestSet)
-
-            if len(friendliestSet.keys()) != 0:
-                chosen = list(friendliestSet.keys())[0:3]
-                if requests is not None and len(requests) != 0:
-                    request_id = list(set([r.requester_id for r in requests]))
-                    for i in chosen:
-                        if i in request_id:
-                            request_id.remove(i)
-
-                    # Optimistic Unchoking
-                    if round % 3 == 0:
-                        if len(request_id) != 0:
-                            self.optimisticUnchoked = random.choice(request_id)
-                try:
-                    chosen.append(self.optimisticUnchoked)
-                except:
-                    chosen.append(list(friendliestSet.keys())[4])
-                bws = even_split(self.up_bw, len(chosen))
+            self.download_array = [download_rate] * num_peers
+            self.upload_array = [download_rate] * num_peers
+            self.roundsOfUploads = [0] * num_peers
         else:
-            # random from requests
-            if requests:
-                requestsApproved = random.sample(requests, 4)
-                chosen = [requestsApproved[0].requester_id, requestsApproved[1].requester_id,
-                          requestsApproved[2].requester_id]
-                bws = even_split(self.up_bw, len(chosen))
+            
+            # Update the values of unchoked
+
+            # iterate through list of pastround_chosen
+            # if pastround_chosen is in history.id
+                # then we update their download value self.download_array
+
+                # update self.roundsOfUploads[i]
+                # if self.roundsOfUploads[i] >= r
+                    # then we decrement then by b
+            # else 
+                # increase our upload setting for that index by (1+alpha)
+            
+            # pull out all the IDs for the people who let us download in the last round
+            generousPeers = {}
+
+            for download in history.downloads[-1]:
+                if download.from_id in generousPeers:
+                    generousPeers[download.from_id] = generousPeers[download.from_id] + download.blocks
+                else:
+                    generousPeers[download.from_id] = download.blocks
+
+
+            for peer in self.pastround_chosen:
+                if peer in generousPeers:
+                    self.download_array[peer] = generousPeers[peer]
+                    
+                    self.roundsOfUploads[peer] += 1
+                    if self.roundsOfUploads[peer] >= r:
+                        self.upload_array[peer] = self.upload_array[peer] * (1- gamma)
+                else:
+                    self.upload_array[peer] = self.upload_array[peer] * (1 + alpha)
+            
+
+        ratio_dictionary = {i : self.download_array[i] / self.upload_array[i] for i in range(num_peers)}
+        ratio_dictionary = dict(sorted(ratio_dictionary.items(), key=lambda item: item[1]))
+
+        space_used = 0
+
+        # iterate through sorted dictionary (give to best ratio)
+        for key, value in ratio_dictionary.items():
+            if (self.upload_array[key] + space_used <= self.up_bw):
+                # give upload_array[key] to that key
+                chosen.append(key)
+                bws.append(self.upload_array[key])
+
+                space_used += self.upload_array[key]
+            else:
+                # rando
+                if len(requests) != 0:
+                    
+                    request = random.choice(requests)
+                    chosen.append(int(request.requester_id[-1]))
+                    bws.append(self.up_bw - space_used)
+                break
+
+
+        self.pastround_chosen = chosen
 
         # create actual uploads out of the list of peer ids and bandwidths
         uploads = [Upload(self.id, peer_id, bw)
