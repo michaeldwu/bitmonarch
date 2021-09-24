@@ -93,8 +93,6 @@ class BitMonarchStd(Peer):
 
         # NEED TO SORT BY RAREST FIRST RIGHT? Is this the place??
         peers.sort(key=lambda p: p.id)
-        print("'PEERS' BELOW HERE")
-        print(peers)
 
         pieceCount = {}
 
@@ -107,24 +105,29 @@ class BitMonarchStd(Peer):
                 else:
                     pieceCount[piece] = 1
 
-        print(pieceCount)
         rarestPieces = sorted(pieceCount, key=pieceCount.get)
         print(rarestPieces)
 
-        # Request rarest piece first, then less rare
-        for piece_id in rarestPieces:
-            if piece_id in np_set:
-                # print(f'Piece_id: {piece_id}')
-                has_piece = set()
-                for peer in peers:
-                    if piece_id in peer.available_pieces:
-                        has_piece.add(peer)
-                peer_req = random.choice(list(has_piece))
-                start_block = self.pieces[piece_id]
-                r = Request(self.id, peer_req.id, piece_id, start_block)
-                requests.append(r)
+        # Iterate through all peers
+        #    For each peer, request the rarest pieces first
+        for peer in peers:
+            for piece_id in rarestPieces:
+                if piece_id in np_set and piece_id in peer.available_pieces:
+                    start_block = self.pieces[piece_id]
+                    r = Request(self.id, peer.id, piece_id, start_block)
+                    requests.append(r)
 
-        return requests
+        # Now that we have overall request list
+        # Create new request list that orders requests by rarity
+        request_c = requests.copy()
+        sortedRequests = []
+        for piece_id in rarestPieces:
+            for request in request_c:
+                if piece_id == request.piece_id:
+                    sortedRequests.append(request)
+                    request = None
+
+        return sortedRequests
 
     def uploads(self, requests, peers, history):
         """
@@ -136,7 +139,6 @@ class BitMonarchStd(Peer):
 
         In each round, this will be called after requests().
         """
-
         round = history.current_round()
         logging.debug("%s again.  It's round %d." % (
             self.id, round))
