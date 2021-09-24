@@ -38,8 +38,8 @@ peers from which it received the highest average download rate during the
 last 2 time periods. (which agents have allowed you to download from them)
 
    * Sort who's friendliest first to you (highest number of blocks in AgentHistory)
-   * Check what pieces you need, if agent doesn't 
-   * If they do, put them in your Upload slot
+   * Check what pieces they need
+   * If you have the piece they need, put them in your Upload slot
 
    Use AgentHistory to be able to see the highest average download rate
 
@@ -58,6 +58,7 @@ class BitMonarchStd(Peer):
         print(("post_init(): %s here!" % self.id))
         self.dummy_state = dict()
         self.dummy_state["cake"] = "lie"
+        self.optimisticUnchoked = 0
     
     def requests(self, peers, history):
         """
@@ -93,7 +94,7 @@ class BitMonarchStd(Peer):
 
         # NEED TO SORT BY RAREST FIRST RIGHT? Is this the place??
         peers.sort(key=lambda p: p.id)
-        print(peers)
+        # print(peers)
 
         # request all available pieces from all peers!
         # (up to self.max_requests from each)
@@ -122,35 +123,63 @@ class BitMonarchStd(Peer):
     def uploads(self, requests, peers, history):
         """
         requests -- a list of the requests for this peer for this round
-        peers -- available info about all the peers
+        peers -- available info about all the peers. Will contain available histories and 
         history -- history for all previous rounds
+
+        example history:
+        AgentHistory(downloads=[[Download(from_id=Seed0, to_id=BitMonarchStd2, piece=0, blocks=1)], [Download(from_id=Seed0, to_id=BitMonarchStd2, piece=1, blocks=1)]], uploads=[[], []])
 
         returns: list of Upload objects.
 
         In each round, this will be called after requests().
+
+
+            * Sort who's friendliest first to you (highest number of blocks in AgentHistory)
+            * Check what pieces they need
+            * If you have the piece they need, put them in your Upload slot
         """
 
         round = history.current_round()
-        logging.debug("%s again.  It's round %d." % (
-            self.id, round))
-        # One could look at other stuff in the history too here.
-        # For example, history.downloads[round-1] (if round != 0, of course)
-        # has a list of Download objects for each Download to this peer in
-        # the previous round.
 
-        if len(requests) == 0:
-            logging.debug("No one wants my pieces!")
-            chosen = []
-            bws = []
+        # Find everyone who's allowed you to download from them before and add you to this set
+        friendliestSet = {}
+        
+        # 3 Upload Slots Normally
+        chosen = []
+        bws = []
+
+        if len(history.downloads) > 0:
+            if len(history.downloads) >= 2:
+                i = -2
+            else:
+                i = -1
+            for download in history.downloads[i]:
+                if download.from_id in friendliestSet:
+                    friendliestSet[download.from_id] = friendliestSet[download.from_id] + download.blocks
+                else:
+                    friendliestSet[download.from_id] = download.blocks
+
+            # Now sort friendlistSet by blocks allowed you to download
+            dict(sorted(friendliestSet.items(), key=lambda item: item[1]))
+
+            if len(friendliestSet.keys()) != 0:
+                chosen = list(friendliestSet.keys())[0:3]
+                bws = even_split(self.up_bw, len(chosen))
+                # if round % 3 == 0:
+                #     if requests is not None:
+                #         print("AI YA")
+                #         self.optimisticUnchoked = random.choice(requests)
+                # chosen.append(self.optimisticUnchoked)
         else:
-            logging.debug("Still here: uploading to a random peer")
-            # change my internal state for no reason
-            self.dummy_state["cake"] = "pie"
+            #random from requests
+            if requests:
+                requestsApproved = random.sample(requests, 3)
+                chosen = [requestsApproved[0].requester_id, requestsApproved[1].requester_id, requestsApproved[2].requester_id]
+                bws = even_split(self.up_bw, len(chosen))
 
-            request = random.choice(requests)
-            chosen = [request.requester_id]
-            # Evenly "split" my upload bandwidth among the one chosen requester
-            bws = even_split(self.up_bw, len(chosen))
+        
+
+        
 
         # create actual uploads out of the list of peer ids and bandwidths
         uploads = [Upload(self.id, peer_id, bw)
