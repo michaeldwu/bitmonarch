@@ -65,6 +65,7 @@ class Dummy(Peer):
                 # which part of the piece do we need next?
                 # (must get the next-needed blocks in order)
                 start_block = self.pieces[piece_id]
+                print(f'start_block: {start_block}')
                 r = Request(self.id, peer.id, piece_id, start_block)
                 requests.append(r)
 

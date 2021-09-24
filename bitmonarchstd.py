@@ -94,31 +94,41 @@ class BitMonarchStd(Peer):
 
         # NEED TO SORT BY RAREST FIRST RIGHT? Is this the place??
         peers.sort(key=lambda p: p.id)
-        # print(peers)
 
-        # request all available pieces from all peers!
-        # (up to self.max_requests from each)
+        pieceCount = {}
+
         for peer in peers:
-            av_set = set(peer.available_pieces)
-            isect = av_set.intersection(np_set)
-            n = min(self.max_requests, len(isect))
-            # More symmetry breaking -- ask for random pieces.
-            # This would be the place to try fancier piece-requesting strategies
-            # to avoid getting the same thing from multiple peers at a time.
+            avail_pieces = peer.available_pieces
+            print(avail_pieces)
+            for piece in avail_pieces:
+                if piece in pieceCount:
+                    pieceCount[piece] += 1
+                else:
+                    pieceCount[piece] = 1
 
-            # iterate through sorted rarityList, check if key is in intersection
-            # 
+        rarestPieces = sorted(pieceCount, key=pieceCount.get)
+        print(rarestPieces)
 
-            # Should also be rarest first
-            for piece_id in random.sample(isect, n):
-                # aha! The peer has this piece! Request it.
-                # which part of the piece do we need next?
-                # (must get the next-needed blocks in order)
-                start_block = self.pieces[piece_id]
-                r = Request(self.id, peer.id, piece_id, start_block)
-                requests.append(r)
+        # Iterate through all peers
+        #    For each peer, request the rarest pieces first
+        for peer in peers:
+            for piece_id in rarestPieces:
+                if piece_id in np_set and piece_id in peer.available_pieces:
+                    start_block = self.pieces[piece_id]
+                    r = Request(self.id, peer.id, piece_id, start_block)
+                    requests.append(r)
 
-        return requests
+        # Now that we have overall request list
+        # Create new request list that orders requests by rarity
+        request_c = requests.copy()
+        sortedRequests = []
+        for piece_id in rarestPieces:
+            for request in request_c:
+                if piece_id == request.piece_id:
+                    sortedRequests.append(request)
+                    request = None
+
+        return sortedRequests
 
     def uploads(self, requests, peers, history):
         """
@@ -138,7 +148,6 @@ class BitMonarchStd(Peer):
             * Check what pieces they need
             * If you have the piece they need, put them in your Upload slot
         """
-
         round = history.current_round()
 
         # Find everyone who's allowed you to download from them before and add you to this set
