@@ -131,47 +131,8 @@ class BitMonarchStd(Peer):
 
         return sortedRequests
 
+
     def uploads(self, requests, peers, history):
-        """
-        requests -- a list of the requests for this peer for this round
-        peers -- available info about all the peers
-        history -- history for all previous rounds
-
-        returns: list of Upload objects.
-
-        In each round, this will be called after requests().
-        """
-
-        round = history.current_round()
-        logging.debug("%s again.  It's round %d." % (
-            self.id, round))
-        # One could look at other stuff in the history too here.
-        # For example, history.downloads[round-1] (if round != 0, of course)
-        # has a list of Download objects for each Download to this peer in
-        # the previous round.
-
-        if len(requests) == 0:
-            logging.debug("No one wants my pieces!")
-            chosen = []
-            bws = []
-        else:
-            logging.debug("Still here: uploading to a random peer")
-            # change my internal state for no reason
-            self.dummy_state["cake"] = "pie"
-
-            request = random.choice(requests)
-            chosen = [request.requester_id]
-            # Evenly "split" my upload bandwidth among the one chosen requester
-            bws = even_split(self.up_bw, len(chosen))
-
-        # create actual uploads out of the list of peer ids and bandwidths
-        uploads = [Upload(self.id, peer_id, bw)
-                   for (peer_id, bw) in zip(chosen, bws)]
-
-        return uploads
-
-
-    def uploadsQQQQ(self, requests, peers, history):
         """
         requests -- a list of the requests for this peer for this round
         peers -- available info about all the peers. Will contain available histories and
@@ -217,15 +178,20 @@ class BitMonarchStd(Peer):
 
             if len(friendliestSet.keys()) != 0:
                 chosen = list(friendliestSet.keys())[0:3]
-                
-                if round % 3 == 0:
-                    if requests is not None and len(requests) != 0:
-                        print(requests)
-                        self.optimisticUnchoked = random.choice(requests)
+                if requests is not None and len(requests) != 0:
+                    request_id = list(set([r.requester_id for r in requests]))
+                    for i in chosen:
+                        if i in request_id:
+                            request_id.remove(i)
+                    
+                    # Optimistic Unchoking
+                    if round % 3 == 0:
+                        if len(request_id) != 0:
+                            self.optimisticUnchoked = random.choice(request_id)
                 try:
-                    chosen.append(self.optimisticUnchoked.requester_id)
+                    chosen.append(self.optimisticUnchoked)
                 except:
-                    pass
+                    chosen.append(list(friendliestSet.keys())[4])
                 bws = even_split(self.up_bw, len(chosen))
         else:
             #random from requests
