@@ -165,8 +165,7 @@ class BitMonarchStd(Peer):
                             friendliestDict[download.from_id] = friendliestDict[download.from_id] + download.blocks
                         else:
                             friendliestDict[download.from_id] = download.blocks
-            
-            
+
             # Now sort friendlistSet by blocks allowed you to download
             friendliestDict = dict(sorted(friendliestDict.items(), key=lambda item: item[1]))
             friendliestIDs = list(friendliestDict.keys())
