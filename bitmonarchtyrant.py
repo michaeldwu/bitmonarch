@@ -18,7 +18,6 @@ class BitMonarchTyrant(Peer):
         print(("post_init(): %s here!" % self.id))
         self.dummy_state = dict()
         self.dummy_state["cake"] = "lie"
-        self.uploadHistory = []
 
         self.download_array = []
         self.upload_array = []
@@ -132,7 +131,7 @@ class BitMonarchTyrant(Peer):
             upload_rate = (self.conf.max_up_bw - self.conf.min_up_bw)/2/4
 
             self.download_array = [download_rate] * num_peers
-            self.upload_array = [download_rate] * num_peers
+            self.upload_array = [upload_rate] * num_peers
             self.roundsOfUploads = [0] * num_peers
         else:
             
