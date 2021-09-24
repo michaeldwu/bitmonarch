@@ -159,6 +159,7 @@ class BitMonarchStd(Peer):
                 i = -1
             for downloadlist in history.downloads[i:]:
                 # Double counting
+                # Double counting
                 for download in downloadlist:
                     if download.from_id in request_id:
                         if download.from_id in friendliestDict:

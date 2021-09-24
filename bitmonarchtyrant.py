@@ -146,6 +146,7 @@ class BitMonarchTyrant(Peer):
 
             for peer in self.pastround_chosen:
                 if peer in generousPeers:
+                    # Currently only updating downloads for if they were nice, can update downloads for everybody that gave me
                     self.download_dict[peer] = generousPeers[peer]
                     
                     self.roundsOfUploads[peer] += 1
@@ -156,27 +157,29 @@ class BitMonarchTyrant(Peer):
                     self.roundsOfUploads[peer] = 0
 
         ratio_dictionary = {peer.id : self.download_dict[peer.id] / self.upload_dict[peer.id] for peer in peers}
-        ratio_dictionary = dict(sorted(ratio_dictionary.items(), key=lambda item: item[1]))
+        ratio_dictionary = dict(sorted(ratio_dictionary.items(), key=lambda item: item[1], reverse=True))
 
         space_used = 0
 
+        request_ids = [request.requester_id for request in requests]
+
         # iterate through sorted dictionary (give to best ratio)
         for key, value in ratio_dictionary.items():
-            if (self.upload_dict[key] + space_used <= self.up_bw):
-                # give upload_array[key] to that key
-                # Don't upload to ourselves
-                if key != self.id:
-                    chosen.append(key)
-                    bws.append(self.upload_dict[key])
+            if key in request_ids:
+                if (self.upload_dict[key] + space_used <= self.up_bw):
+                    # give upload_array[key] to that key
+                    # Don't upload to ourselves
+                    if key != self.id:
+                        chosen.append(key)
+                        bws.append(self.upload_dict[key])
 
-                    space_used += self.upload_dict[key]
-            else:
-                # rando
-                if len(requests) != 0:
-                    request = random.choice(requests)
-                    chosen.append(request.requester_id)
-                    bws.append(self.up_bw - space_used)
-                break
+                        space_used += self.upload_dict[key]
+                else:
+                    # rando
+                    if len(requests) != 0:
+                        chosen.append(random.choice(request_ids))
+                        bws.append(self.up_bw - space_used)
+                    break
 
         self.pastround_chosen = chosen
 

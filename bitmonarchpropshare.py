@@ -13,6 +13,7 @@ from messages import Upload, Request
 from util import even_split
 from peer import Peer
 
+
 class BitMonarchPropShare(Peer):
     def post_init(self):
         print(("post_init(): %s here!" % self.id))
@@ -77,7 +78,6 @@ class BitMonarchPropShare(Peer):
         requests = sorted(requests, key=lambda x: (pieceCount[x.piece_id], random.random()))
         return requests
 
-
     def uploads(self, requests, peers, history):
         """
         requests -- a list of the requests for this peer for this round
@@ -97,24 +97,60 @@ class BitMonarchPropShare(Peer):
         # has a list of Download objects for each Download to this peer in
         # the previous round.
 
+        generousPeers = {}
+        request_ids = {request.requester_id for request in requests}
 
+        chosen = []
+        bws = []
 
-        if len(requests) == 0:
-            logging.debug("No one wants my pieces!")
-            chosen = []
-            bws = []
+        # In round 0, there are two ways to approach the optimistic unchoking 10%
+        # 1) One peer gets 10% exactly, the rest of the peers split the 90%
+        # 2) All peers split the 90% equally, one peer gets the extra 10%
+        # We opted to go for option 2, as that better represents the spirit of optimistic unchoking
+
+        if not history.downloads:
+            if len(request_ids) != 0:
+                chosen = request_ids
+                bws = even_split(int(self.up_bw * 0.9), len(request_ids))
+                bws[random.randint(0, len(bws))] += 0.1 * self.up_bw
         else:
-            logging.debug("Still here: uploading to a random peer")
-            # change my internal state for no reason
-            self.dummy_state["cake"] = "pie"
+            for download in history.downloads[-1]:
+                if download.from_id in generousPeers:
+                    generousPeers[download.from_id] = generousPeers[download.from_id] + download.blocks
+                else:
+                    generousPeers[download.from_id] = download.blocks
 
-            request = random.choice(requests)
-            chosen = [request.requester_id]
-            # Evenly "split" my upload bandwidth among the one chosen requester
-            bws = even_split(self.up_bw, len(chosen))
+            inter = set()
+            not_inter = set()
+
+            for request_id in request_ids:
+                if request_id in generousPeers:
+                    inter.add(request_id)
+
+            not_inter = request_ids - inter
+
+            total_downloaded = 0
+            for id in inter:
+                total_downloaded += generousPeers[id]
+
+            for id in inter:
+                chosen.append(id)
+                bws.append(generousPeers[id] / total_downloaded * (0.9 * self.up_bw))
+
+            # If not_inter is empty (all requesters were generous)
+            # Then we will give one of the requesters the extra 10%
+            if not not_inter:
+                bws
+
+            # if not_inter:
+            #     chosen.append(random.choice(list(not_inter)))
+            #     bws.append(0.1 * self.up_bw)
+            # elif :
+            #     bws[random.randint(0, len(bws) - 1)] += 0.1 * self.up_bw
+
 
         # create actual uploads out of the list of peer ids and bandwidths
         uploads = [Upload(self.id, peer_id, bw)
                    for (peer_id, bw) in zip(chosen, bws)]
-            
+
         return uploads
