@@ -8,6 +8,7 @@
 
 import random
 import logging
+import math
 
 from messages import Upload, Request
 from util import even_split
@@ -103,56 +104,70 @@ class BitMonarchPropShare(Peer):
         chosen = []
         bws = []
 
-        print('hello')
-        print(requests)
-
         # In round 0, there are two ways to approach the optimistic unchoking 10%
         # 1) One peer gets 10% exactly, the rest of the peers split the 90%
         # 2) All peers split the 90% equally, one peer gets the extra 10%
         # We opted to go for option 2, as that better represents the spirit of optimistic unchoking
-
-        if not history.downloads:
-            if len(request_ids) != 0:
-                chosen = request_ids
-                bws = even_split(int(self.up_bw * 0.9), len(request_ids))
-                bws[random.randint(0, len(bws))] += 0.1 * self.up_bw
-        else:
-            for download in history.downloads[-1]:
-                if download.from_id in generousPeers:
-                    generousPeers[download.from_id] = generousPeers[download.from_id] + download.blocks
-                else:
-                    generousPeers[download.from_id] = download.blocks
-
-            inter = set()
-            not_inter = set()
-
-            for request_id in request_ids:
-                if request_id in generousPeers:
-                    inter.add(request_id)
-
-            not_inter = request_ids - inter
-
-            total_downloaded = 0
-            for id in inter:
-                total_downloaded += generousPeers[id]
-
-            for id in inter:
-                chosen.append(id)
-                bws.append(generousPeers[id] / total_downloaded * (0.9 * self.up_bw))
-
-            # If not_inter is empty (all requesters were generous)
-            # Then we will give one of the requesters the extra 10%
-            if not not_inter:
-                if len(bws) != 0:
-                    bws[random.randint(0, len(bws))] += 0.1 * self.up_bw
+        if len(request_ids) != 0:
+            # If we have no downloads to split between, then we just split evenly
+            if not history.downloads:
+                    chosen = request_ids
+                    bws = even_split(int(self.up_bw * 0.9), len(request_ids))
+                    bws[random.randrange(0, len(bws))] += int(0.1 * self.up_bw)
+            # We do have a history of downloads
             else:
-                chosen.append(random.choice(list(not_inter)))
-                bws.append(0.1 * self.up_bw)
+                # Adding up all of the downloads
+                for download in history.downloads[-1]:
+                    if download.from_id in generousPeers:
+                        generousPeers[download.from_id] = generousPeers[download.from_id] + download.blocks
+                    else:
+                        generousPeers[download.from_id] = download.blocks
 
+                inter = set()
+                not_inter = set()
+
+                for request_id in request_ids:
+                    if request_id in generousPeers:
+                        inter.add(request_id)
+
+                not_inter = request_ids - inter
+
+                total_downloaded = 0
+                for id in inter:
+                    total_downloaded += generousPeers[id]
+
+                # If inter, and not_inter
+                if inter and not_inter:
+                    opt_bw = int(math.ceil(0.1 * self.up_bw))
+                    norm_bw = self.up_bw - opt_bw
+
+                    # All inter gets divided
+                    for peer_id in inter:
+                        chosen.append(peer_id)
+                        bws.append(int((generousPeers[peer_id] / total_downloaded) * norm_bw))
+
+                    # Optimistically unchoke one
+                    chosen.append(random.choice(list(not_inter)))
+                    bws.append(opt_bw)
+
+                # If inter, and NOT not_inter (all requesters were generous, just divide bandwidth evenly, no unchoke)
+                elif inter and not not_inter:
+                    for peer_id in inter:
+                        chosen.append(peer_id)
+                        bws.append(int((generousPeers[peer_id] / total_downloaded) * self.up_bw))
+
+                # If NOT inter, and not_inter (all requesters were not generous, divide bandwidth evenly and give one the 10% boost)
+                elif not inter and not_inter:
+                    chosen = request_ids
+                    print(int(self.up_bw * 0.9))
+                    print(len(request_ids))
+                    bws = even_split(int(self.up_bw * 0.9), len(request_ids))
+                    bws[random.randrange(0, len(bws))] += int(0.1 * self.up_bw)
 
         # create actual uploads out of the list of peer ids and bandwidths
+        print(f'chosen:{chosen}')
+        print(f'bws:{bws}')
+
         uploads = [Upload(self.id, peer_id, bw)
                    for (peer_id, bw) in zip(chosen, bws)]
-        print("AAA")
-        print(uploads)
         return uploads
