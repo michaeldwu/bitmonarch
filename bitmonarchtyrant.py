@@ -113,8 +113,10 @@ class BitMonarchTyrant(Peer):
 
         num_peers = len(peers)
         if round == 0:
+            # We chose to pick a lower upload and download initial rate (subtracting here instead of adding) because
+            # its very easy for us to increase our upload (every round we aren't unchoked), but rather tough to
+            # decrease upload, as it requires us to be unchoked for r consecutive rounds
             download_rate = (self.conf.max_up_bw - self.conf.min_up_bw)/2/4
-            # Try making upload_rate lower! -Jmack
             upload_rate = (self.conf.max_up_bw - self.conf.min_up_bw)/2/4
 
             for peer in peers:
