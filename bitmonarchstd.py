@@ -146,9 +146,6 @@ class BitMonarchStd(Peer):
         # 3 Upload Slots Normally
         chosen = []
         bws = []
-        
-        request_id = set([r.requester_id for r in requests])
-        print(request_id)
 
         request_id = list(set([r.requester_id for r in requests]))
 
@@ -174,7 +171,6 @@ class BitMonarchStd(Peer):
         
         length = min(3, len(friendliestIDs))
         # add randos to end of this in our request set
-        print(friendliestIDs)
         chosen = friendliestIDs[:length]
         chosen += random.sample(request_id, min(4 - length, len(request_id)))
 

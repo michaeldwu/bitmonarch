@@ -114,7 +114,7 @@ class BitMonarchTyrant(Peer):
         num_peers = len(peers)
         if round == 0:
             download_rate = (self.conf.max_up_bw - self.conf.min_up_bw)/2/4
-            # Try making upload_rate lower! -Jmack
+            # Trying to make upload_rate lower!
             upload_rate = (self.conf.max_up_bw - self.conf.min_up_bw)/2/4
 
             for peer in peers:
