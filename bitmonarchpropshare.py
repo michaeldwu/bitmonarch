@@ -138,16 +138,16 @@ class BitMonarchPropShare(Peer):
 
             for id in inter:
                 chosen.append(id)
-                bws.append(generousPeers[id] / total_downloaded * (0.9 * self.up_bw))
+                bws.append(int(generousPeers[id] / total_downloaded * (0.9 * self.up_bw)))
 
             # If not_inter is empty (all requesters were generous)
             # Then we will give one of the requesters the extra 10%
             if not not_inter:
                 if len(bws) != 0:
-                    bws[random.randint(0, len(bws))] += 0.1 * self.up_bw
+                    bws[random.randint(0, len(bws)-1)] += 0.1 * self.up_bw
             else:
                 chosen.append(random.choice(list(not_inter)))
-                bws.append(0.1 * self.up_bw)
+                bws.append(max(0.1 * self.up_bw, 1))
 
 
         # create actual uploads out of the list of peer ids and bandwidths
