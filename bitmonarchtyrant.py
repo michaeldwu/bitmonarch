@@ -167,6 +167,7 @@ class BitMonarchTyrant(Peer):
                         self.upload_array[peer] = self.upload_array[peer] * (1- gamma)
                 else:
                     self.upload_array[peer] = self.upload_array[peer] * (1 + alpha)
+                    self.roundsOfUploads[peer] = 0
             
 
         ratio_dictionary = {i : self.download_array[i] / self.upload_array[i] for i in range(num_peers)}
@@ -178,10 +179,13 @@ class BitMonarchTyrant(Peer):
         for key, value in ratio_dictionary.items():
             if (self.upload_array[key] + space_used <= self.up_bw):
                 # give upload_array[key] to that key
-                chosen.append(key)
-                bws.append(self.upload_array[key])
 
-                space_used += self.upload_array[key]
+                # Don't upload to ourselves
+                if "BitMonarchTyrant" + str(key) != self.id:
+                    chosen.append(key)
+                    bws.append(self.upload_array[key])
+
+                    space_used += self.upload_array[key]
             else:
                 # rando
                 if len(requests) != 0:
@@ -194,8 +198,11 @@ class BitMonarchTyrant(Peer):
 
         self.pastround_chosen = chosen
 
+        chosenModified = ["BitMonarchTyrant" + str(i) for i in chosen]
+
         # create actual uploads out of the list of peer ids and bandwidths
         uploads = [Upload(self.id, peer_id, bw)
-                   for (peer_id, bw) in zip(chosen, bws)]
+                   for (peer_id, bw) in zip(chosenModified, bws)]
+        print(uploads)
 
         return uploads
