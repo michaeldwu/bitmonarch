@@ -99,7 +99,6 @@ class BitMonarchStd(Peer):
 
         for peer in peers:
             avail_pieces = peer.available_pieces
-            print(avail_pieces)
             for piece in avail_pieces:
                 if piece in pieceCount:
                     pieceCount[piece] += 1
@@ -107,7 +106,6 @@ class BitMonarchStd(Peer):
                     pieceCount[piece] = 1
 
         rarestPieces = sorted(pieceCount, key=pieceCount.get)
-        print(rarestPieces)
 
         # Iterate through all peers
         #    For each peer, request the rarest pieces first
