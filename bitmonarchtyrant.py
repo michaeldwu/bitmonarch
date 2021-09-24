@@ -160,8 +160,13 @@ class BitMonarchTyrant(Peer):
 
         space_used = 0
 
+        
+
         # iterate through sorted dictionary (give to best ratio)
         for key, value in ratio_dictionary.items():
+
+            # Check for seeds
+
             if (self.upload_dict[key] + space_used <= self.up_bw):
                 # give upload_array[key] to that key
                 # Don't upload to ourselves
