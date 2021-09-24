@@ -18,7 +18,7 @@ class BitMonarchTourney(Peer):
         print(("post_init(): %s here!" % self.id))
         self.dummy_state = dict()
         self.dummy_state["cake"] = "lie"
-    
+
     def requests(self, peers, history):
         """
         peers: available info about the peers (who has what pieces)
@@ -32,7 +32,6 @@ class BitMonarchTourney(Peer):
         needed_pieces = list(filter(needed, list(range(len(self.pieces)))))
         np_set = set(needed_pieces)  # sets support fast intersection ops.
 
-
         logging.debug("%s here: still need pieces %s" % (
             self.id, needed_pieces))
 
@@ -44,30 +43,38 @@ class BitMonarchTourney(Peer):
         logging.debug("look at the AgentHistory class in history.py for details")
         logging.debug(str(history))
 
-        requests = []   # We'll put all the things we want here
+        requests = []  # We'll put all the things we want here
         # Symmetry breaking is good...
         random.shuffle(needed_pieces)
-        
-        # Sort peers by id.  This is probably not a useful sort, but other 
-        # sorts might be useful
-        peers.sort(key=lambda p: p.id)
-        # request all available pieces from all peers!
-        # (up to self.max_requests from each)
-        for peer in peers:
-            av_set = set(peer.available_pieces)
-            isect = av_set.intersection(np_set)
-            n = min(self.max_requests, len(isect))
-            # More symmetry breaking -- ask for random pieces.
-            # This would be the place to try fancier piece-requesting strategies
-            # to avoid getting the same thing from multiple peers at a time.
-            for piece_id in random.sample(isect, n):
-                # aha! The peer has this piece! Request it.
-                # which part of the piece do we need next?
-                # (must get the next-needed blocks in order)
-                start_block = self.pieces[piece_id]
-                r = Request(self.id, peer.id, piece_id, start_block)
-                requests.append(r)
 
+        # Whenever a peer downloads a piece of the file, it sends per-piece have messages to the peers in its neighborhood. Each peer maintains
+        # an estimate of the availibility of each piece by counting how many of its neighbors have the pieces.
+
+        peers.sort(key=lambda p: p.id)
+        pieceCount = {}
+
+        for peer in peers:
+            avail_pieces = peer.available_pieces
+            for piece in avail_pieces:
+                if piece in pieceCount:
+                    pieceCount[piece] += 1
+                else:
+                    pieceCount[piece] = 1
+
+        rarestPieces = sorted(pieceCount, key=pieceCount.get)
+
+        # index is piece ID, value is how often it shows up
+
+        # Iterate through all peers
+        #    For each peer, request the rarest pieces first
+        for peer in peers:
+            for piece_id in rarestPieces:
+                if (piece_id in np_set) and (piece_id in peer.available_pieces):
+                    start_block = self.pieces[piece_id]
+                    r = Request(self.id, peer.id, piece_id, start_block)
+                    requests.append(r)
+
+        requests = sorted(requests, key=lambda x: (pieceCount[x.piece_id], random.random()))
         return requests
 
     def uploads(self, requests, peers, history):
