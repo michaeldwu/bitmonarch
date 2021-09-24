@@ -155,32 +155,39 @@ class BitMonarchStd(Peer):
         chosen = []
         bws = []
 
-        if len(history.downloads) > 0:
-            if len(history.downloads) >= 2:
+        if round > 0:
+            if round >= 2:
                 i = -2
             else:
                 i = -1
-            for download in history.downloads[i]:
-                if download.from_id in friendliestSet:
-                    friendliestSet[download.from_id] = friendliestSet[download.from_id] + download.blocks
-                else:
-                    friendliestSet[download.from_id] = download.blocks
+            for downloadlist in history.downloads[i:]:
+                # Double counting
+                for download in downloadlist:
+                    if download.from_id in friendliestSet:
+                        friendliestSet[download.from_id] = friendliestSet[download.from_id] + download.blocks
+                    else:
+                        friendliestSet[download.from_id] = download.blocks
 
             # Now sort friendlistSet by blocks allowed you to download
             dict(sorted(friendliestSet.items(), key=lambda item: item[1]))
+            # print(friendliestSet)
 
             if len(friendliestSet.keys()) != 0:
                 chosen = list(friendliestSet.keys())[0:3]
+                
+                if round % 3 == 0:
+                    if requests is not None and len(requests) != 0:
+                        print(requests)
+                        self.optimisticUnchoked = random.choice(requests)
+                try:
+                    chosen.append(self.optimisticUnchoked.requester_id)
+                except:
+                    pass
                 bws = even_split(self.up_bw, len(chosen))
-                # if round % 3 == 0:
-                #     if requests is not None:
-                #         print("AI YA")
-                #         self.optimisticUnchoked = random.choice(requests)
-                # chosen.append(self.optimisticUnchoked)
         else:
             #random from requests
             if requests:
-                requestsApproved = random.sample(requests, 3)
+                requestsApproved = random.sample(requests, 4)
                 chosen = [requestsApproved[0].requester_id, requestsApproved[1].requester_id, requestsApproved[2].requester_id]
                 bws = even_split(self.up_bw, len(chosen))
 
