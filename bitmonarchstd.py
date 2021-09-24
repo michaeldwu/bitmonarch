@@ -121,17 +121,60 @@ class BitMonarchStd(Peer):
         request_c = requests.copy()
         sortedRequests = []
         for piece_id in rarestPieces:
+            sortedwithinPiece = []
             for request in request_c:
                 if piece_id == request.piece_id:
-                    sortedRequests.append(request)
+                    sortedwithinPiece.append(request)
                     request = None
+            random.shuffle(sortedwithinPiece)
+            sortedRequests.extend(sortedwithinPiece)
 
         return sortedRequests
 
     def uploads(self, requests, peers, history):
         """
         requests -- a list of the requests for this peer for this round
-        peers -- available info about all the peers. Will contain available histories and 
+        peers -- available info about all the peers
+        history -- history for all previous rounds
+
+        returns: list of Upload objects.
+
+        In each round, this will be called after requests().
+        """
+
+        round = history.current_round()
+        logging.debug("%s again.  It's round %d." % (
+            self.id, round))
+        # One could look at other stuff in the history too here.
+        # For example, history.downloads[round-1] (if round != 0, of course)
+        # has a list of Download objects for each Download to this peer in
+        # the previous round.
+
+        if len(requests) == 0:
+            logging.debug("No one wants my pieces!")
+            chosen = []
+            bws = []
+        else:
+            logging.debug("Still here: uploading to a random peer")
+            # change my internal state for no reason
+            self.dummy_state["cake"] = "pie"
+
+            request = random.choice(requests)
+            chosen = [request.requester_id]
+            # Evenly "split" my upload bandwidth among the one chosen requester
+            bws = even_split(self.up_bw, len(chosen))
+
+        # create actual uploads out of the list of peer ids and bandwidths
+        uploads = [Upload(self.id, peer_id, bw)
+                   for (peer_id, bw) in zip(chosen, bws)]
+
+        return uploads
+
+
+    def uploadsQQQQ(self, requests, peers, history):
+        """
+        requests -- a list of the requests for this peer for this round
+        peers -- available info about all the peers. Will contain available histories and
         history -- history for all previous rounds
 
         example history:
@@ -150,7 +193,7 @@ class BitMonarchStd(Peer):
 
         # Find everyone who's allowed you to download from them before and add you to this set
         friendliestSet = {}
-        
+
         # 3 Upload Slots Normally
         chosen = []
         bws = []
@@ -160,7 +203,7 @@ class BitMonarchStd(Peer):
                 i = -2
             else:
                 i = -1
-            for download in history.downloads[i]:
+            for download in history.downloads[i:]:
                 if download.from_id in friendliestSet:
                     friendliestSet[download.from_id] = friendliestSet[download.from_id] + download.blocks
                 else:
@@ -184,12 +227,8 @@ class BitMonarchStd(Peer):
                 chosen = [requestsApproved[0].requester_id, requestsApproved[1].requester_id, requestsApproved[2].requester_id]
                 bws = even_split(self.up_bw, len(chosen))
 
-        
-
-        
-
         # create actual uploads out of the list of peer ids and bandwidths
         uploads = [Upload(self.id, peer_id, bw)
                    for (peer_id, bw) in zip(chosen, bws)]
-            
+
         return uploads
